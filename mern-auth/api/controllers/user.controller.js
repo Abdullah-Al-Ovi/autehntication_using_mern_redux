@@ -12,33 +12,60 @@ export const test = (req, res) => {
 // update user
 
 export const updateUser = asyncHandler(async (req, res) => {
-  const fileUrl = "http://localhost:8080"; 
-  let fileUrlWithPath = '';  
-  if(req.file){
-     fileUrlWithPath = `${fileUrl}/images/${req.file.filename}`  
+  console.log(req.body);
+
+  const fileUrl = "http://localhost:8080";
+  let fileUrlWithPath = "";
+
+  // If a file is uploaded, update profile picture URL
+  if (req.file) {
+    fileUrlWithPath = `${fileUrl}/images/${req.file.filename}`;
   }
+
+  // Check if the user is authorized to update this account
   if (req.user.id !== req.params.id) {
-    throw new ApiError(401, 'You can update only your account!');
+    throw new ApiError(401, "You can update only your account!");
   }
+
+  // Hash the password if provided
   if (req.body.password) {
     req.body.password = bcryptjs.hashSync(req.body.password, 10);
   }
+
+  // Normalize the interests field
+  let { interests } = req.body;
+  if (!interests) {
+    interests = []; // If interests is missing, set it to an empty array
+  } else if (typeof interests === "string") {
+    interests = [interests]; // Convert single string to an array
+  } else if (!Array.isArray(interests)) {
+    interests = []; // Fallback for invalid input types
+  }
+
+  // Prepare update data
+  const updateData = {
+    username: req.body.username,
+    email: req.body.email,
+    password: req.body.password,
+    profilePicture: fileUrlWithPath || req.body.profilePicture, // Keep old profile picture if no new file
+    gender: req.body.gender,
+    interests, // Always an array now
+    country: req.body.country,
+  };
+
+  // Update user in the database
   const updatedUser = await User.findByIdAndUpdate(
     req.params.id,
-    {
-      $set: {
-        username: req.body.username,
-        email: req.body.email,
-        password: req.body.password,
-        profilePicture: fileUrlWithPath ? fileUrlWithPath : req.body.profilePicture,
-      },
-    },
+    { $set: updateData },
     { new: true }
   );
-  const { password, ...rest } = updatedUser._doc;
- return res.status(200).json(new ApiResponse(200, rest, 'User has been updated...'));
 
-})
+  // Remove password from the response
+  const { password, ...rest } = updatedUser._doc;
+
+  return res.status(200).json(new ApiResponse(200, rest, "User has been updated..."));
+});
+
 
 
 // delete user
